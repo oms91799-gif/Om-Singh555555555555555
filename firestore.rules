@@ -1,0 +1,116 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() { return request.auth != null; }
+    function isVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+    
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'oms91799@gmail.com' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().role == 'admin')
+      );
+    }
+
+    function isSupervisor() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().role == 'supervisor';
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin() || isSupervisor());
+      allow list: if isAdmin();
+      
+      // Admin can create users, and users can self-register as supervisors.
+      allow create: if isValidId(userId) && (
+        isAdmin() || 
+        (isSignedIn() && request.auth.uid == userId && incoming().role == 'supervisor')
+      );
+      allow update: if false; // Role updates should be tight, or via admin
+      allow delete: if isAdmin();
+    }
+
+    match /employees/{employeeId} {
+      function isValidEmployee(data) {
+        return data.keys().hasAll(['empId', 'siteId', 'name', 'fatherName', 'aadharNo', 'mobile', 'bankAccountNo', 'ifscCode', 'bankName', 'gender', 'dailyRate', 'epfApplicable', 'esiApplicable', 'designation', 'productionIncentiveRate'])
+            && data.empId is string && data.empId.size() <= 50
+            && data.siteId is string
+            && data.name is string && data.name.size() <= 100
+            && data.gender in ['Male', 'Female', 'Other']
+            && data.dailyRate is number && data.productionIncentiveRate is number;
+      }
+      
+      allow get: if isSupervisor() || isAdmin();
+      allow list: if isSupervisor() || isAdmin();
+      
+      allow create: if isAdmin() && isValidId(employeeId) && isValidEmployee(incoming()) && incoming().createdAt == request.time;
+      allow update: if isAdmin() && isValidId(employeeId) && isValidEmployee(incoming()) && incoming().updatedAt == request.time && incoming().createdAt == existing().createdAt;
+      allow delete: if isAdmin();
+    }
+
+    match /sites/{siteId} {
+      allow get, list: if isSupervisor() || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /attendances/{attendanceId} {
+      function isValidAttendance(data) {
+        return data.keys().hasAll(['employeeId', 'date', 'siteId', 'division', 'duty', 'productionIncentiveHours', 'status', 'markedBy'])
+            && data.employeeId is string && data.employeeId.size() <= 128
+            && data.date is string && data.date.size() == 10
+            && data.siteId is string && data.siteId.size() <= 128
+            && data.duty is number
+            && data.productionIncentiveHours is number
+            && data.status in ['pending', 'approved', 'rejected']
+            && data.markedBy is string && data.markedBy.size() <= 128;
+      }
+
+      allow get, list: if isSupervisor() || isAdmin();
+      
+      // Supervisors can create pending attendances
+      allow create: if (isSupervisor() || isAdmin()) 
+                    && isValidId(attendanceId) 
+                    && isValidAttendance(incoming()) 
+                    && exists(/databases/$(database)/documents/employees/$(incoming().employeeId))
+                    && exists(/databases/$(database)/documents/sites/$(incoming().siteId))
+                    && incoming().markedBy == request.auth.uid
+                    && incoming().status == (isAdmin() ? incoming().status : 'pending')
+                    && incoming().createdAt == request.time;
+
+      allow update: if (isAdmin() && isValidId(attendanceId) && isValidAttendance(incoming()) && incoming().updatedAt == request.time)
+                    || (isSupervisor() && isValidId(attendanceId) && existing().status == 'pending' && incoming().status == 'pending' && incoming().markedBy == request.auth.uid && incoming().updatedAt == request.time && incoming().diff(existing()).affectedKeys().hasOnly(['division', 'duty', 'productionIncentiveHours', 'updatedAt']));
+                    
+      allow delete: if isAdmin() || (isSupervisor() && existing().status == 'pending' && existing().markedBy == request.auth.uid);
+    }
+
+    match /advances/{advanceId} {
+      function isValidAdvance(data) {
+        return data.keys().hasAll(['employeeId', 'siteId', 'date', 'amount'])
+            && data.employeeId is string
+            && data.siteId is string
+            && data.date is string
+            && data.amount is number;
+      }
+      allow get, list: if isSupervisor() || isAdmin();
+      allow create, update, delete: if isSupervisor() || isAdmin(); // or just isAdmin() depending on requirement, let's say supervisor can give advance too
+    }
+
+    match /payrolls/{payrollId} {
+      allow get, list: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+  }
+}

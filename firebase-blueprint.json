@@ -1,0 +1,137 @@
+{
+  "entities": {
+    "user": {
+      "title": "User",
+      "description": "User profiles with role-based access.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "supervisor"] },
+        "siteId": { "type": "string", "description": "For supervisors, to restrict access. Optional." },
+        "createdAt": { "type": "string", "format": "timestamp" }
+      },
+      "required": ["email", "name", "role"]
+    },
+    "employee": {
+      "title": "Employee",
+      "description": "Master roll data for employees.",
+      "type": "object",
+      "properties": {
+        "empId": { "type": "string", "description": "Punching ID / Emp ID (Main Identity)" },
+        "name": { "type": "string" },
+        "fatherName": { "type": "string" },
+        "uanNo": { "type": "string" },
+        "aadharNo": { "type": "string" },
+        "mobile": { "type": "string" },
+        "esiNo": { "type": "string" },
+        "bankAccountNo": { "type": "string" },
+        "ifscCode": { "type": "string" },
+        "bankName": { "type": "string" },
+        "gender": { "type": "string", "enum": ["Male", "Female", "Other"] },
+        "dailyRate": { "type": "number" },
+        "epfApplicable": { "type": "boolean" },
+        "esiApplicable": { "type": "boolean" },
+        "designation": { "type": "string" },
+        "productionIncentiveRate": { "type": "number" },
+        "createdAt": { "type": "string", "format": "timestamp" },
+        "updatedAt": { "type": "string", "format": "timestamp" }
+      },
+      "required": [
+        "empId", "name", "fatherName", "aadharNo", "mobile",
+        "bankAccountNo", "ifscCode", "bankName", "gender",
+        "dailyRate", "epfApplicable", "esiApplicable", "designation",
+        "productionIncentiveRate"
+      ]
+    },
+    "site": {
+      "title": "Site",
+      "description": "Sites where employees work.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["shift", "line"] },
+        "divisions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of shifts (A, B, C, General) or lines (Line 1, Line 8, Line CL)"
+        },
+        "createdAt": { "type": "string", "format": "timestamp" }
+      },
+      "required": ["name", "type", "divisions"]
+    },
+    "attendance": {
+      "title": "Attendance",
+      "description": "Daily attendance record.",
+      "type": "object",
+      "properties": {
+        "employeeId": { "type": "string", "description": "Reference to employee document ID" },
+        "date": { "type": "string", "description": "YYYY-MM-DD" },
+        "siteId": { "type": "string", "description": "Reference to site document ID" },
+        "division": { "type": "string" },
+        "duty": { "type": "number", "description": "1 for single, 2 for double" },
+        "productionIncentiveHours": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "markedBy": { "type": "string", "description": "User ID of supervisor" },
+        "approvedBy": { "type": "string", "description": "User ID of admin" },
+        "createdAt": { "type": "string", "format": "timestamp" },
+        "updatedAt": { "type": "string", "format": "timestamp" }
+      },
+      "required": [
+        "employeeId", "date", "siteId", "division", "duty",
+        "productionIncentiveHours", "status", "markedBy"
+      ]
+    },
+    "payroll": {
+      "title": "Payroll",
+      "description": "Monthly payroll record.",
+      "type": "object",
+      "properties": {
+        "employeeId": { "type": "string" },
+        "month": { "type": "string", "description": "YYYY-MM" },
+        "basicSalary": { "type": "number" },
+        "productionIncentiveAmount": { "type": "number" },
+        "advance": { "type": "number" },
+        "foodDeduction": { "type": "number" },
+        "penalty": { "type": "number" },
+        "otherDeduction": { "type": "number" },
+        "hra": { "type": "number" },
+        "attendanceAward": { "type": "number" },
+        "bonus": { "type": "number" },
+        "epfDeduction": { "type": "number" },
+        "esiDeduction": { "type": "number" },
+        "netSalary": { "type": "number" },
+        "status": { "type": "string", "enum": ["draft", "finalized"] },
+        "createdAt": { "type": "string", "format": "timestamp" },
+        "updatedAt": { "type": "string", "format": "timestamp" }
+      },
+      "required": [
+        "employeeId", "month", "basicSalary", "productionIncentiveAmount",
+        "advance", "foodDeduction", "penalty", "otherDeduction", "hra",
+        "attendanceAward", "bonus", "epfDeduction", "esiDeduction", "netSalary", "status"
+      ]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": { "$ref": "#/entities/user" },
+      "description": "User profiles for admins and supervisors"
+    },
+    "employees/{employeeId}": {
+      "schema": { "$ref": "#/entities/employee" },
+      "description": "Global master list of employees"
+    },
+    "sites/{siteId}": {
+      "schema": { "$ref": "#/entities/site" },
+      "description": "Work sites with configuration"
+    },
+    "attendances/{attendanceId}": {
+      "schema": { "$ref": "#/entities/attendance" },
+      "description": "Daily attendance for employees"
+    },
+    "payrolls/{payrollId}": {
+      "schema": { "$ref": "#/entities/payroll" },
+      "description": "Monthly finalized payrolls"
+    }
+  }
+}
